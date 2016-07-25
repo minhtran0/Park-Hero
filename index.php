@@ -34,10 +34,18 @@ if ($user) {
 		'scope' => 'public_profile, email'
 		));
 }
-if(isset($_GET['sessionEnd'])){
-	session_destroy();
+if ($user) {
+	$_SESSION['account'] = 1;
 }
-
+// do a check for google+
+else {
+	$_SESSION['account'] = 3;
+}
+// SESSION['account']: 1 is facebook, 2 is google+, 3 is email
+if (isset($_SESSION['account']) && $_SESSION['account'] > 0) {
+	header("Location: view.php");
+	exit(1);
+}
 
 ?>
 

@@ -3,28 +3,12 @@
 require_once "global.php";
 
 $success = true;
-$user = $facebook->getUser();
-if ($user) {
-	try {
-    // Proceed knowing you have a logged in user who's authenticated.
-		$user_profile = $facebook->api('/me');
-	} catch (FacebookApiException $e) {
-		error_log($e);
-		$user = null;
-		$success = false;
-	}
+if (!isset($_SESSION['userid'])) {
+	$success = false;
 }
-if ($user) {
-	$_SESSION['account'] = 1;
-}
-// do a check for google+
-else {
-	$_SESSION['account'] = 3;
-}
-// SESSION['account']: 1 is facebook, 2 is google+, 3 is email
 if (!$success) {
 	header("Location: index.php");
-	exit(1);
+	exit(0);
 }
 
 ?>
@@ -93,49 +77,7 @@ if (!$success) {
 				</div>
 				<div class="col-md-6" id="contentbox">	<!-- List column -->
 
-					<?php
-
-					if ($success) {
-						$query = "SELECT *, ( 3959 * acos( cos( radians(37) ) * cos( radians( lat ) ) * cos( radians( lng ) - radians(-122) ) + sin( radians(37) ) * sin( radians( lat ) ) ) ) AS distance FROM places HAVING distance < 20 ORDER BY distance LIMIT 0 , 20";
-						$result = $conn->query($query);
-					}
-
-					$letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-					$count = 0;
-
-					?>
-
-					<?php while($row = $result->fetch_assoc()): ?>
-					<div class="row item">					<!-- START Content Row -->
-						<div class="col-md-1 col1">	<!-- Col 1 -->
-							<div class="row label">
-								<?php echo substr($letters, $count, 1); $count++; ?>
-							</div>
-							<div class="row distance">
-								2 mi
-							</div>
-						</div>
-						<div class="col-md-3 col2">	<!-- Col 2 -->
-							<div class="row price"> 	<!-- price -->
-								<?php echo '$'.$row['price'].'/hour'; ?>
-							</div>
-							<div class="row rating">	<!-- rating -->
-								<?php echo $row['rating'].' stars'; ?>
-							</div>
-						</div>
-						<div class="col-md-8 col3">	<!-- Col 3 -->
-							<div class="row title">	<!-- title -->
-								<?php echo $row['title']; ?>
-							</div>
-							<div class="row description">	<!-- description -->
-								<?php echo $row['description']; ?>
-							</div>
-							<div class="row address">	<!-- address -->
-								<?php echo $row['address']; ?>
-							</div>
-						</div>
-					</div>							<!-- END Content Row-->
-					<?php endwhile; ?>
+					
 
 				</div>								<!-- END List Column-->
 			</div>
@@ -156,6 +98,24 @@ if (!$success) {
 					zoom: 14
 				});
 				var infoWindow = new google.maps.InfoWindow({map: map});
+				var bounds = map.getBounds();
+
+				var center = bounds.getCenter();
+				var ne = bounds.getNorthEast();
+
+				// r = radius of the earth in statute miles
+				var r = 3963.0;  
+
+				// Convert lat or lng from decimal degrees into radians (divide by 57.2958)
+				var lat1 = center.lat() / 57.2958; 
+				var lon1 = center.lng() / 57.2958;
+				var lat2 = ne.lat() / 57.2958;
+				var lon2 = ne.lng() / 57.2958;
+
+				// distance = circle radius from center to Northeast corner of bounds
+				var dis = r * Math.acos(Math.sin(lat1) * Math.sin(lat2) + 
+					Math.cos(lat1) * Math.cos(lat2) * Math.cos(lon2 - lon1));
+
 
 			  // Try HTML5 geolocation.
 			  if (navigator.geolocation) {
@@ -169,15 +129,26 @@ if (!$success) {
 			  			position: pos,
 			  			map: map
 			  		});
+			  		$.ajax({
+			  			url: 'getLocations.php',
+			  			type: 'POST',
+			  			data: {'lat':pos[lat], 'lng':pos[lng], 'radius':dis},
+			  			dataType: "json",
+			  			success: function(result){
+			  				$.each(result, function(idx, pos){
+			  					placeMarker(pos);
+			  				});
+			  			},
+			  			error: function(xhr, desc, err) {
+			  				console.log(xhr);
+			  				console.log("Details: " + desc + "\nError:" + err);
+			  			}
+			  		});
 			  	});
 			  } else {
 			    // Browser doesn't support Geolocation
 			    handleLocationError(false, infoWindow, map.getCenter());
 			}
-
-			google.maps.event.addListener(map, 'click', function(event) {
-				placeMarker(event.latLng);
-			});
 
 			function placeMarker(location) {
 				var marker = new google.maps.Marker({
